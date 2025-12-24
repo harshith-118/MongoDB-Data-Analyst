@@ -1,0 +1,11 @@
+langgraph==0.2.55
+langchain==0.3.12
+langchain-core==0.3.25
+pymongo==4.10.1
+python-dotenv==1.0.1
+requests==2.32.3
+pydantic==2.10.3
+streamlit==1.40.2
+pandas==2.2.3
+openai>=1.0.0
+
