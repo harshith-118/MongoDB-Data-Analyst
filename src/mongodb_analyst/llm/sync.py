@@ -5,9 +5,9 @@ Handles OpenAI API calls with rate limiting and logging.
 """
 from typing import Dict
 from openai import OpenAI
-from logger_config import logger
-from rate_limiter import api_rate_limiter
-from config import LLM_API_KEY
+from ..config.logger import logger
+from ..config.rate_limiter import api_rate_limiter
+from ..config.settings import LLM_API_KEY
 
 
 def gpt_api_call(data: Dict, use_rate_limit: bool = True) -> str:

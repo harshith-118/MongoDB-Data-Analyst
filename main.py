@@ -6,7 +6,7 @@ Supports both CLI and Streamlit web UI modes.
 """
 import sys
 import subprocess
-from config import MONGODB_URI, MONGODB_DATABASE, LLM_API_KEY
+from src.mongodb_analyst.config import MONGODB_URI, MONGODB_DATABASE, LLM_API_KEY
 
 
 def check_config():
@@ -52,8 +52,8 @@ def print_banner():
 
 def get_modules():
     """Import modules after config validation"""
-    from graph import ask_question, create_app
-    from mongodb_utils import mongo_connection
+    from src.mongodb_analyst.graph import ask_question, create_app
+    from src.mongodb_analyst.mongodb import mongo_connection
     return ask_question, mongo_connection
 
 

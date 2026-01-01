@@ -2,7 +2,7 @@
 Unit tests for monitoring and metrics
 """
 import pytest
-from monitoring import MetricsCollector, HealthChecker
+from src.mongodb_analyst.monitoring import MetricsCollector, HealthChecker
 
 
 class TestMetricsCollector:

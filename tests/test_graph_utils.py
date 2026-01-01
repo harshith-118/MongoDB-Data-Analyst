@@ -2,7 +2,7 @@
 Unit tests for graph utility functions
 """
 import pytest
-from graph_utils import (
+from src.mongodb_analyst.graph.utils import (
     format_schema_for_prompt,
     clean_query,
     format_results_for_summarization,

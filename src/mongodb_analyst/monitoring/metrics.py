@@ -6,7 +6,7 @@ Provides metrics, health checks, and performance monitoring.
 import time
 from typing import Dict, Any, Optional
 from datetime import datetime
-from logger_config import logger
+from ..config.logger import logger
 
 
 class MetricsCollector:
@@ -89,7 +89,7 @@ class HealthChecker:
     def check_mongodb_connection() -> Dict[str, Any]:
         """Check MongoDB connection health"""
         try:
-            from mongodb_utils import mongo_connection
+            from ..mongodb.connection import mongo_connection
             db = mongo_connection.get_database()
             # Try to list collections as a health check
             collections = db.list_collection_names()
@@ -111,7 +111,7 @@ class HealthChecker:
     def check_openai_connection() -> Dict[str, Any]:
         """Check OpenAI API connection health"""
         try:
-            from config import LLM_API_KEY
+            from ..config.settings import LLM_API_KEY
             if not LLM_API_KEY:
                 return {
                     "status": "unhealthy",

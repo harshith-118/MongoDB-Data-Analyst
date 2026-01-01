@@ -6,10 +6,10 @@ __start__ -> Input Validator -> Exploration Node -> Query Hallucination Node
 -> MongoDB Node -> Summarization Node -> Summary Hallucination Node -> __end__
 """
 from langgraph.graph import StateGraph, START, END
-from logger_config import logger
 
-from graph_state import GraphState
-from graph_nodes import (
+from ..config.logger import logger
+from .state import GraphState
+from .nodes import (
     input_validator,
     exploration_node,
     query_hallucination_node,

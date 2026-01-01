@@ -9,7 +9,7 @@ from pymongo.errors import PyMongoError
 from bson import ObjectId
 from datetime import datetime
 
-from config import MONGODB_URI, MONGODB_DATABASE
+from ..config.settings import MONGODB_URI, MONGODB_DATABASE
 
 
 class MongoDBConnection:

@@ -9,7 +9,7 @@ from functools import wraps
 from typing import Callable, Any
 from ratelimit import limits, sleep_and_retry
 from dotenv import load_dotenv
-from logger_config import logger
+from .logger import logger
 
 load_dotenv()
 

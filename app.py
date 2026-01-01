@@ -9,15 +9,15 @@ import pandas as pd
 from datetime import datetime
 from typing import Dict, Any, List
 
-from config import MONGODB_URI, MONGODB_DATABASE, LLM_API_KEY
+from src.mongodb_analyst.config import MONGODB_URI, MONGODB_DATABASE, LLM_API_KEY
 
 # Check if configuration is valid before importing other modules
 CONFIG_VALID = all([MONGODB_URI, MONGODB_DATABASE, LLM_API_KEY])
 
 if CONFIG_VALID:
-    from graph import ask_question
-    from mongodb_utils import mongo_connection
-    from monitoring import HealthChecker, metrics_collector
+    from src.mongodb_analyst.graph import ask_question
+    from src.mongodb_analyst.mongodb import mongo_connection
+    from src.mongodb_analyst.monitoring import HealthChecker, metrics_collector
 
 # ============================================================================
 # Page Configuration

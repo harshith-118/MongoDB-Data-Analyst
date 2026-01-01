@@ -8,23 +8,23 @@ import re
 from datetime import datetime
 from typing import Dict, Any
 
-from logger_config import logger
-from monitoring import metrics_collector
-from graph_state import GraphState
-from graph_utils import (
+from ..config.logger import logger
+from ..monitoring.metrics import metrics_collector
+from .state import GraphState
+from .utils import (
     format_schema_for_prompt,
     clean_query,
     format_results_for_summarization,
     format_results
 )
-from llm_utils import gpt_api_call
-from prompts import (
+from ..llm.sync import gpt_api_call
+from ..prompts import (
     QUERY_GENERATION_PROMPT,
     SUMMARIZATION_PROMPT,
     QUERY_HALLUCINATION_PROMPT,
     SUMMARY_HALLUCINATION_PROMPT
 )
-from mongodb_utils import mongo_connection
+from ..mongodb.connection import mongo_connection
 
 
 def input_validator(state: GraphState) -> GraphState:

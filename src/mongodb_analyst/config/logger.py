@@ -13,7 +13,9 @@ load_dotenv()
 
 # Get log level from environment or default to INFO
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-LOG_FILE = os.getenv("LOG_FILE", "logs/mongodb_analyst.log")
+# Default log file path (relative to project root)
+default_log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "logs", "mongodb_analyst.log")
+LOG_FILE = os.getenv("LOG_FILE", default_log_file)
 
 # Create logs directory if it doesn't exist
 if LOG_FILE:

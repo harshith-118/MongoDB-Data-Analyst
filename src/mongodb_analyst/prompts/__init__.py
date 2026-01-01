@@ -87,11 +87,25 @@ QUERY RESULTS:
 GENERATED SUMMARY:
 {summary}
 
-Check if the summary:
-1. Accurately reflects the data in the results
-2. Doesn't make claims not supported by the results
-3. Uses correct numbers, names, and facts from the results
-4. Doesn't hallucinate information not present in the data
+IMPORTANT: Only flag as HALLUCINATION if the summary contains information that is:
+1. Factually incorrect (wrong numbers, names, or data that contradicts the results)
+2. Not present in the query results at all
+3. Makes claims that directly contradict the actual data
 
-Respond with ONLY "VALID" if the summary is accurate, or "HALLUCINATION: [specific issue]" if there are inaccuracies."""
+Do NOT flag as hallucination if:
+- The summary correctly states facts from the results (even if worded differently)
+- The summary uses different wording but conveys the same meaning
+- The summary makes reasonable inferences from the data
+- The summary correctly identifies the same movie/data point with the same values
+
+Be very careful: Only mark as HALLUCINATION if there is a clear factual error. If the summary correctly states "Movie X has value Y" and the results show "Movie X has value Y", that is VALID even if worded differently.
+
+Respond with ONLY "VALID" if the summary is accurate, or "HALLUCINATION: [specific factual error - explain what is wrong]" if there are actual inaccuracies."""
+
+__all__ = [
+    "QUERY_GENERATION_PROMPT",
+    "SUMMARIZATION_PROMPT",
+    "QUERY_HALLUCINATION_PROMPT",
+    "SUMMARY_HALLUCINATION_PROMPT",
+]
 

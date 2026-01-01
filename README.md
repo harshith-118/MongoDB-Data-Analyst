@@ -72,6 +72,11 @@ The system validates every summary against actual query results:
 - Made-up names or identifiers
 - Information not present in query results
 
+**Recent Improvements:**
+- Enhanced validation prompts to reduce false positives
+- Better distinction between factual errors and wording differences
+- More accurate detection of actual hallucinations vs. correct statements
+
 ### Retry Logic
 
 - **Maximum Retries**: 3 attempts for both queries and summaries
@@ -97,6 +102,14 @@ MONGODB_DATABASE=your_database_name
 
 # OpenAI API Configuration  
 LLM_API_KEY=your_openai_api_key_here
+
+# Optional: Logging Configuration
+LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_FILE=logs/mongodb_analyst.log  # Optional: log to file
+
+# Optional: Rate Limiting Configuration
+RATE_LIMIT_CALLS=60  # Max API calls per period
+RATE_LIMIT_PERIOD=60  # Time period in seconds
 ```
 
 > **Note**: This project uses OpenAI's API directly. You'll need an OpenAI API key. Get one at [platform.openai.com](https://platform.openai.com/api-keys)
@@ -189,14 +202,45 @@ python main.py --help
 ## 📁 Project Structure
 
 ```
-├── app.py                # Streamlit web application
-├── main.py               # CLI entry point
-├── graph.py              # LangGraph workflow definition with hallucination detection
-├── mongodb_utils.py      # MongoDB connection and query utilities
-├── config.py             # Configuration settings
-├── setup_cinema_db.py    # Script to create sample cinema database
-├── requirements.txt      # Python dependencies
-└── README.md             # This file
+├── app.py                    # Streamlit web application
+├── main.py                   # CLI entry point
+├── setup.py                  # Package setup script
+├── setup_cinema_db.py        # Script to create sample cinema database
+├── requirements.txt          # Python dependencies
+├── pytest.ini                # Pytest configuration
+├── .env.example              # Environment variables template
+├── src/                      # Source code directory
+│   └── mongodb_analyst/      # Main package
+│       ├── __init__.py       # Package exports
+│       ├── graph/            # Graph workflow module
+│       │   ├── __init__.py
+│       │   ├── graph.py      # Main workflow definition
+│       │   ├── state.py      # Graph state definition
+│       │   ├── nodes.py      # All graph node functions
+│       │   └── utils.py      # Graph utility functions
+│       ├── llm/              # LLM utilities module
+│       │   ├── __init__.py
+│       │   ├── sync.py       # Synchronous LLM calls
+│       │   └── async_utils.py # Asynchronous LLM calls
+│       ├── prompts/          # Prompt templates module
+│       │   └── __init__.py   # All prompt templates
+│       ├── mongodb/          # MongoDB utilities module
+│       │   ├── __init__.py
+│       │   └── connection.py # MongoDB connection and queries
+│       ├── monitoring/       # Monitoring module
+│       │   ├── __init__.py
+│       │   └── metrics.py    # Metrics and health checks
+│       └── config/           # Configuration module
+│           ├── __init__.py
+│           ├── settings.py   # Environment configuration
+│           ├── logger.py     # Logging configuration
+│           └── rate_limiter.py # Rate limiting
+├── tests/                    # Test directory
+│   ├── __init__.py
+│   ├── test_graph_utils.py
+│   └── test_monitoring.py
+├── logs/                     # Log files directory
+└── README.md                 # This file
 ```
 
 ## 🔄 How It Works
@@ -253,6 +297,121 @@ LLM_API_KEY=sk-your_openai_api_key_here
 - **PyMongo** - MongoDB driver
 - **Pandas** - Data manipulation
 - **OpenAI API** - Natural language processing, query generation, summarization, and hallucination detection
+- **Pytest** - Testing framework
+- **Python Logging** - Comprehensive logging system
+- **Rate Limiting** - API call throttling and management
+
+## 🧪 Testing
+
+The project includes a comprehensive test suite using `pytest`. Run tests to verify everything is working correctly:
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run with coverage report
+pytest --cov=. --cov-report=html
+
+# Run specific test file
+pytest tests/test_graph_utils.py
+pytest tests/test_monitoring.py
+```
+
+### Test Coverage
+
+The test suite includes:
+- **Graph Utilities Tests** (`test_graph_utils.py`): Tests for formatting, cleaning, and utility functions
+- **Monitoring Tests** (`test_monitoring.py`): Tests for metrics collection and health checks
+
+Tests can be run without a live MongoDB connection as they use mocked dependencies.
+
+## 💻 Developer Guide
+
+### Using Logging
+
+The project includes a centralized logging system. Import and use the logger throughout your code:
+
+```python
+from src.mongodb_analyst.config.logger import logger
+
+logger.info("This is an info message")
+logger.error("This is an error message", exc_info=True)
+logger.debug("This is a debug message")
+logger.warning("This is a warning message")
+```
+
+**Log Configuration:**
+- Logs are written to `logs/mongodb_analyst.log` by default
+- Rotating file handler (10MB, 5 backups)
+- Configurable log level via `LOG_LEVEL` environment variable
+- Console and file handlers for comprehensive logging
+
+### Using Metrics and Health Checks
+
+Monitor system performance and health:
+
+```python
+from src.mongodb_analyst.monitoring import metrics_collector, HealthChecker
+
+# Get current metrics
+metrics = metrics_collector.get_metrics()
+print(f"Total queries: {metrics['total_queries']}")
+print(f"Success rate: {metrics['success_rate']*100:.1f}%")
+print(f"API calls: {metrics['api_calls']}")
+
+# Check system health
+health = HealthChecker.get_health_status()
+if health["status"] == "healthy":
+    print("All systems operational")
+else:
+    print(f"MongoDB: {health['mongodb']['status']}")
+    print(f"OpenAI: {health['openai']['status']}")
+```
+
+**Available Metrics:**
+- Total queries, successful/failed queries
+- Hallucination detections and retries
+- API call counts
+- Average query execution time
+- Success/failure rates
+
+### Using Rate Limiting
+
+Rate limiting is automatically applied to API calls, but you can also use it manually:
+
+```python
+from src.mongodb_analyst.config.rate_limiter import api_rate_limiter
+
+# Wait if needed before making API call
+api_rate_limiter.wait_if_needed()
+# ... make your API call ...
+```
+
+**Rate Limit Configuration:**
+- Default: 60 calls per 60 seconds
+- Configurable via `RATE_LIMIT_CALLS` and `RATE_LIMIT_PERIOD` in `.env`
+- Prevents API throttling and rate limit errors
+
+### Package Installation
+
+Install the package in development mode:
+
+```bash
+pip install -e .
+```
+
+This allows you to import from `mongodb_analyst` directly:
+
+```python
+from mongodb_analyst.graph import ask_question
+from mongodb_analyst.mongodb import mongo_connection
+from mongodb_analyst.config import LLM_API_KEY
+```
 
 ## 📚 Key Features Explained
 
@@ -267,6 +426,12 @@ The system uses OpenAI GPT to understand your natural language question and auto
 2. **Summary Validation**: After generating a summary, the system fact-checks it against the actual query results to ensure all claims are accurate.
 
 Both validation stages use OpenAI GPT for intelligent fact-checking and automatically retry up to 3 times if issues are detected.
+
+**Recent Improvements:**
+- Enhanced validation prompts to reduce false positives
+- Better distinction between factual errors and wording differences
+- More accurate detection focusing on actual data contradictions
+- Improved handling of correct statements that may be worded differently
 
 ### 📝 Result Summarization
 After executing the query, the system uses OpenAI GPT to analyze the results and provide a natural language answer. The summary is then validated against the actual data to ensure accuracy.
@@ -299,15 +464,59 @@ The included `setup_cinema_db.py` script creates a comprehensive cinema database
 - The system will accept results after 3 retry attempts to prevent infinite loops
 - Check the generated query in the expandable section to see what was ultimately used
 - If summaries are being retried, verify that your query results contain the expected data
+- **False Positives**: The system has been improved to reduce false positives. If you see hallucination warnings for correct summaries, check the logs for details - the system now better distinguishes between factual errors and correct statements with different wording
 
 ## 📝 Recent Updates
 
-### Hallucination Detection System (Latest)
+### Latest Improvements (v2.0)
+
+#### 🏗️ Architecture & Code Quality
+- ✅ **Modular Architecture**: Reorganized code into `src/` with logical module structure
+  - `src/mongodb_analyst/graph/` - All graph-related code (workflow, nodes, state, utils)
+  - `src/mongodb_analyst/llm/` - LLM utilities (synchronous and asynchronous)
+  - `src/mongodb_analyst/prompts/` - All prompt templates
+  - `src/mongodb_analyst/mongodb/` - MongoDB connection and query utilities
+  - `src/mongodb_analyst/monitoring/` - Metrics collection and health checks
+  - `src/mongodb_analyst/config/` - Configuration, logging, and rate limiting
+- ✅ **Package Structure**: Proper Python package structure with `setup.py` for easy installation
+- ✅ **Better Code Organization**: Reduced large files (graph.py from 963 lines to ~150 lines)
+- ✅ **Improved Maintainability**: Clear module boundaries and separation of concerns
+
+#### 🔍 Quality & Reliability
+- ✅ **Improved Hallucination Detection**: Enhanced validation prompts to reduce false positives
+- ✅ **Comprehensive Logging System**: 
+  - Centralized logging with file and console handlers
+  - Rotating file handler (10MB, 5 backups)
+  - Configurable log levels via environment variables
+- ✅ **Unit Tests**: Comprehensive test suite with pytest
+  - Tests for graph utilities
+  - Tests for monitoring and metrics
+  - Can run without live MongoDB connection (mocked)
+
+#### ⚡ Performance & Operations
+- ✅ **Async Operations**: Async LLM calls for better performance with batch processing support
+- ✅ **Rate Limiting**: 
+  - Token bucket rate limiter
+  - Configurable limits via environment variables
+  - Automatic waiting when limits are reached
+  - Prevents API throttling
+- ✅ **Monitoring & Metrics**: 
+  - Real-time metrics tracking (queries, API calls, performance)
+  - Health checks for MongoDB and OpenAI connections
+  - System health monitoring in UI sidebar
+
+#### 📦 Developer Experience
+- ✅ **Environment Template**: `.env.example` file for easy setup
+- ✅ **Comprehensive Documentation**: Updated README with all features and usage examples
+- ✅ **Easy to Extend**: Clear module structure makes adding features straightforward
+
+### Hallucination Detection System
 - ✅ Added query hallucination detection node
 - ✅ Added summary hallucination detection node
 - ✅ Automatic retry logic (up to 3 attempts)
 - ✅ Schema-based query validation
 - ✅ Fact-checking for summaries against actual results
+- ✅ **Improved validation prompts to reduce false positives**
 - ✅ Improved accuracy and reliability
 
 ### Previous Updates
@@ -316,6 +525,30 @@ The included `setup_cinema_db.py` script creates a comprehensive cinema database
 - ✅ Enhanced UI with prominent answer display
 - ✅ Cinema database setup script
 - ✅ Improved query parsing and error handling
+
+## 📊 Impact & Benefits
+
+### Code Quality
+- ✅ **Better Organization**: Modular structure with clear separation of concerns
+- ✅ **Improved Maintainability**: Smaller, focused modules are easier to understand and modify
+- ✅ **Easier Testing**: Individual components can be tested in isolation
+- ✅ **Better Error Tracking**: Comprehensive logging system for debugging
+
+### Performance
+- ✅ **Async Operations**: Better concurrency for multiple concurrent requests
+- ✅ **Rate Limiting**: Prevents API throttling and ensures reliable operation
+- ✅ **Metrics Tracking**: Monitor performance and identify bottlenecks
+
+### Reliability
+- ✅ **Health Checks**: Proactive monitoring of system components
+- ✅ **Comprehensive Logging**: Detailed logs for debugging and troubleshooting
+- ✅ **Unit Tests**: Regression prevention and code quality assurance
+
+### Developer Experience
+- ✅ **Clear Module Structure**: Easy to navigate and understand the codebase
+- ✅ **Comprehensive Documentation**: Well-documented code and usage examples
+- ✅ **Easy to Extend**: Modular design makes adding new features straightforward
+- ✅ **Package Installation**: Can be installed as a proper Python package
 
 ## 📄 License
 

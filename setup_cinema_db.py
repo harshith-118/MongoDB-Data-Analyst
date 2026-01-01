@@ -15,7 +15,7 @@ from pymongo import MongoClient
 from datetime import datetime, timedelta
 from bson import ObjectId
 import random
-from config import MONGODB_URI
+from src.mongodb_analyst.config import MONGODB_URI
 
 # Database name for cinema
 CINEMA_DB_NAME = "cinema_db"
