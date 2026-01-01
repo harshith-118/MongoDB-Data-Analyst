@@ -17,6 +17,7 @@ CONFIG_VALID = all([MONGODB_URI, MONGODB_DATABASE, LLM_API_KEY])
 if CONFIG_VALID:
     from graph import ask_question
     from mongodb_utils import mongo_connection
+    from monitoring import HealthChecker, metrics_collector
 
 # ============================================================================
 # Page Configuration
@@ -480,6 +481,38 @@ with st.sidebar:
         if st.button("🔄 Retry Connection"):
             load_schema()
             st.rerun()
+    
+    # Health Check & Metrics
+    if CONFIG_VALID:
+        st.markdown("### 🏥 Health & Metrics")
+        
+        if st.button("🔍 Check Health", use_container_width=True):
+            health_status = HealthChecker.get_health_status()
+            if health_status["status"] == "healthy":
+                st.success("✅ All systems healthy")
+            else:
+                st.warning("⚠️ System degraded")
+                if health_status["mongodb"]["status"] != "healthy":
+                    st.error(f"MongoDB: {health_status['mongodb'].get('error', 'Unknown error')}")
+                if health_status["openai"]["status"] != "healthy":
+                    st.error(f"OpenAI: {health_status['openai'].get('error', 'Unknown error')}")
+        
+        # Metrics Display
+        with st.expander("📈 Metrics", expanded=False):
+            metrics = metrics_collector.get_metrics()
+            if metrics["total_queries"] > 0:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Queries", metrics["total_queries"])
+                    st.metric("Success Rate", f"{metrics['success_rate']*100:.1f}%")
+                with col2:
+                    st.metric("API Calls", metrics["api_calls"])
+                    st.metric("Avg Query Time", f"{metrics['average_query_time']:.2f}s")
+                
+                if metrics["hallucination_detections"] > 0:
+                    st.warning(f"⚠️ {metrics['hallucination_detections']} hallucination(s) detected")
+            else:
+                st.info("No metrics available yet")
     
     st.divider()
     
