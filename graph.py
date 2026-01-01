@@ -49,6 +49,13 @@ class GraphState(TypedDict):
     
     # Summarized answer (natural language response)
     summarized_answer: Optional[str]
+    
+    # Hallucination detection
+    query_hallucination_detected: bool
+    summary_hallucination_detected: bool
+    query_retry_count: int
+    summary_retry_count: int
+    max_retries: int
 
 
 # ============================================================================
@@ -206,6 +213,13 @@ def exploration_node(state: GraphState) -> GraphState:
     question = state.get("validated_question", "")
     schema_info = state.get("schema_info", {})
     
+    # Get current retry count
+    retry_count = state.get("query_retry_count", 0)
+    
+    # Increment retry count if this is a retry (hallucination was detected)
+    if state.get("query_hallucination_detected", False):
+        retry_count = retry_count + 1
+    
     # Format schema info for the prompt
     schema_text = format_schema_for_prompt(schema_info)
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -238,7 +252,9 @@ def exploration_node(state: GraphState) -> GraphState:
         
         return {
             **state,
-            "generated_query": generated_query
+            "generated_query": generated_query,
+            "query_retry_count": retry_count,
+            "query_hallucination_detected": False  # Reset for new query
         }
             
     except Exception as e:
@@ -396,6 +412,188 @@ def format_results(results: Any, question: str, query: str) -> str:
 
 
 # ============================================================================
+# Node: Query Hallucination Detection
+# ============================================================================
+
+QUERY_HALLUCINATION_PROMPT = """You are a MongoDB query validator. Your task is to check if the generated MongoDB query contains hallucinations or errors.
+
+DATABASE SCHEMA:
+{schema_info}
+
+USER'S QUESTION:
+{question}
+
+GENERATED QUERY:
+{query}
+
+Check if the query:
+1. References collections that exist in the schema
+2. Uses field names that exist in the collections
+3. Uses valid MongoDB operators and syntax
+4. Matches the intent of the user's question
+
+Respond with ONLY "VALID" if the query is correct, or "HALLUCINATION: [reason]" if there are issues."""
+
+
+def query_hallucination_node(state: GraphState) -> GraphState:
+    """
+    Detects hallucinations in the generated MongoDB query.
+    Returns state with query_hallucination_detected flag.
+    """
+    generated_query = state.get("generated_query")
+    question = state.get("validated_question", "")
+    schema_info = state.get("schema_info", {})
+    retry_count = state.get("query_retry_count", 0)
+    max_retries = state.get("max_retries", 3)
+    
+    # If already exceeded max retries, skip detection
+    if retry_count >= max_retries:
+        return {
+            **state,
+            "query_hallucination_detected": False  # Accept query after max retries
+        }
+    
+    if not generated_query:
+        return {
+            **state,
+            "query_hallucination_detected": False
+        }
+    
+    try:
+        # Format schema for prompt
+        schema_text = format_schema_for_prompt(schema_info)
+        
+        # Prepare hallucination detection prompt
+        prompt = QUERY_HALLUCINATION_PROMPT.replace("{schema_info}", schema_text)
+        prompt = prompt.replace("{question}", question)
+        prompt = prompt.replace("{query}", generated_query)
+        
+        # Call LLM for hallucination detection
+        data = {
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a MongoDB query validator. Analyze queries for hallucinations and errors."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 200
+        }
+        
+        validation_response = gpt_api_call(data).strip()
+        
+        # Check if hallucination detected
+        hallucination_detected = not validation_response.upper().startswith("VALID")
+        
+        return {
+            **state,
+            "query_hallucination_detected": hallucination_detected
+        }
+        
+    except Exception as e:
+        # On error, assume no hallucination to continue flow
+        return {
+            **state,
+            "query_hallucination_detected": False
+        }
+
+
+# ============================================================================
+# Node: Summary Hallucination Detection
+# ============================================================================
+
+SUMMARY_HALLUCINATION_PROMPT = """You are a fact-checker. Your task is to verify if the summary accurately represents the query results.
+
+USER'S QUESTION:
+{question}
+
+QUERY RESULTS:
+{results}
+
+GENERATED SUMMARY:
+{summary}
+
+Check if the summary:
+1. Accurately reflects the data in the results
+2. Doesn't make claims not supported by the results
+3. Uses correct numbers, names, and facts from the results
+4. Doesn't hallucinate information not present in the data
+
+Respond with ONLY "VALID" if the summary is accurate, or "HALLUCINATION: [specific issue]" if there are inaccuracies."""
+
+
+def summary_hallucination_node(state: GraphState) -> GraphState:
+    """
+    Detects hallucinations in the generated summary.
+    Returns state with summary_hallucination_detected flag.
+    """
+    summarized_answer = state.get("summarized_answer")
+    query_results = state.get("query_results")
+    question = state.get("validated_question", "")
+    retry_count = state.get("summary_retry_count", 0)
+    max_retries = state.get("max_retries", 3)
+    
+    # If already exceeded max retries, skip detection
+    if retry_count >= max_retries:
+        return {
+            **state,
+            "summary_hallucination_detected": False  # Accept summary after max retries
+        }
+    
+    if not summarized_answer or query_results is None:
+        return {
+            **state,
+            "summary_hallucination_detected": False
+        }
+    
+    try:
+        # Format results for prompt
+        results_text = format_results_for_summarization(query_results, max_items=10, max_length=2000)
+        
+        # Prepare hallucination detection prompt
+        prompt = SUMMARY_HALLUCINATION_PROMPT.replace("{question}", question)
+        prompt = prompt.replace("{results}", results_text)
+        prompt = prompt.replace("{summary}", summarized_answer)
+        
+        # Call LLM for hallucination detection
+        data = {
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a fact-checker. Verify summaries against actual data for accuracy."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 200
+        }
+        
+        validation_response = gpt_api_call(data).strip()
+        
+        # Check if hallucination detected
+        hallucination_detected = not validation_response.upper().startswith("VALID")
+        
+        return {
+            **state,
+            "summary_hallucination_detected": hallucination_detected
+        }
+        
+    except Exception as e:
+        # On error, assume no hallucination to continue flow
+        return {
+            **state,
+            "summary_hallucination_detected": False
+        }
+
+
+# ============================================================================
 # Node: Summarization Node
 # ============================================================================
 
@@ -429,6 +627,13 @@ def summarization_node(state: GraphState) -> GraphState:
     question = state.get("validated_question", "")
     generated_query = state.get("generated_query", "")
     query_error = state.get("query_error")
+    
+    # Get current retry count
+    retry_count = state.get("summary_retry_count", 0)
+    
+    # Increment retry count if this is a retry (hallucination was detected)
+    if state.get("summary_hallucination_detected", False):
+        retry_count = retry_count + 1
     
     # If query failed, return error message without summarization
     if not query_success:
@@ -479,6 +684,8 @@ Provide a helpful, natural language response explaining that no data was found m
             return {
                 **state,
                 "summarized_answer": summarized_answer,
+                "summary_retry_count": retry_count,
+                "summary_hallucination_detected": False,  # Reset for new summary
                 "final_answer": f"{summarized_answer}\n\n" + "=" * 60 + "\n📊 Query Details:\n" + "=" * 60 + f"\nQuery: {generated_query}\n\nNo documents found matching your query."
             }
         except Exception as e:
@@ -525,6 +732,8 @@ Provide a helpful, natural language response explaining that no data was found m
         return {
             **state,
             "summarized_answer": summarized_answer,
+            "summary_retry_count": retry_count,
+            "summary_hallucination_detected": False,  # Reset for new summary
             "final_answer": final_answer
         }
         
@@ -533,6 +742,8 @@ Provide a helpful, natural language response explaining that no data was found m
         return {
             **state,
             "summarized_answer": None,
+            "summary_retry_count": retry_count,
+            "summary_hallucination_detected": False,
             "final_answer": state.get("final_answer", f"Error during summarization: {str(e)}")
         }
 
@@ -587,6 +798,32 @@ def should_continue(state: GraphState) -> str:
     return "continue"
 
 
+def should_retry_query(state: GraphState) -> str:
+    """
+    Determine if we should retry query generation due to hallucination.
+    """
+    hallucination_detected = state.get("query_hallucination_detected", False)
+    retry_count = state.get("query_retry_count", 0)
+    max_retries = state.get("max_retries", 3)
+    
+    if hallucination_detected and retry_count < max_retries:
+        return "retry"
+    return "continue"
+
+
+def should_retry_summary(state: GraphState) -> str:
+    """
+    Determine if we should retry summary generation due to hallucination.
+    """
+    hallucination_detected = state.get("summary_hallucination_detected", False)
+    retry_count = state.get("summary_retry_count", 0)
+    max_retries = state.get("max_retries", 3)
+    
+    if hallucination_detected and retry_count < max_retries:
+        return "retry"
+    return "continue"
+
+
 # ============================================================================
 # Graph Builder
 # ============================================================================
@@ -596,7 +833,7 @@ def build_graph() -> StateGraph:
     Build and return the LangGraph workflow.
     
     Flow:
-    __start__ -> input_validator -> exploration_node -> mongodb_node -> summarization_node -> __end__
+    __start__ -> input_validator -> exploration_node -> query_hallucination_node -> mongodb_node -> summarization_node -> summary_hallucination_node -> __end__
     """
     # Create the graph
     workflow = StateGraph(GraphState)
@@ -604,8 +841,10 @@ def build_graph() -> StateGraph:
     # Add nodes
     workflow.add_node("input_validator", input_validator)
     workflow.add_node("exploration_node", exploration_node)
+    workflow.add_node("query_hallucination_node", query_hallucination_node)
     workflow.add_node("mongodb_node", mongodb_node)
     workflow.add_node("summarization_node", summarization_node)
+    workflow.add_node("summary_hallucination_node", summary_hallucination_node)
     
     # Add edges
     # Start -> Input Validator
@@ -621,14 +860,34 @@ def build_graph() -> StateGraph:
         }
     )
     
-    # Exploration Node -> MongoDB Node
-    workflow.add_edge("exploration_node", "mongodb_node")
+    # Exploration Node -> Query Hallucination Detection
+    workflow.add_edge("exploration_node", "query_hallucination_node")
+    
+    # Query Hallucination Node -> MongoDB Node or retry (conditional)
+    workflow.add_conditional_edges(
+        "query_hallucination_node",
+        should_retry_query,
+        {
+            "retry": "exploration_node",  # Retry query generation
+            "continue": "mongodb_node"     # Continue to execution
+        }
+    )
     
     # MongoDB Node -> Summarization Node
     workflow.add_edge("mongodb_node", "summarization_node")
     
-    # Summarization Node -> End
-    workflow.add_edge("summarization_node", END)
+    # Summarization Node -> Summary Hallucination Detection
+    workflow.add_edge("summarization_node", "summary_hallucination_node")
+    
+    # Summary Hallucination Node -> End or retry (conditional)
+    workflow.add_conditional_edges(
+        "summary_hallucination_node",
+        should_retry_summary,
+        {
+            "retry": "summarization_node",  # Retry summary generation
+            "continue": END                  # End workflow
+        }
+    )
     
     return workflow
 
@@ -668,7 +927,12 @@ def ask_question(question: str) -> Dict[str, Any]:
         "query_success": False,
         "query_error": None,
         "final_answer": "",
-        "summarized_answer": None
+        "summarized_answer": None,
+        "query_hallucination_detected": False,
+        "summary_hallucination_detected": False,
+        "query_retry_count": 0,
+        "summary_retry_count": 0,
+        "max_retries": 3
     }
     
     # Run the graph
